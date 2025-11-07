@@ -27,7 +27,7 @@ public class FileHandler {
         exchange.sendResponseHeaders( 200, size );
         try ( OutputStream os = exchange.getResponseBody() ) {
             Files.copy( path, os );
-            Log.write( "File downloaded" );
+            Log.write( "File downloaded", "INFO" );
         }
     }
 }

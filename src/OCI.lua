@@ -1,6 +1,5 @@
 local internet = require("internet")
 local component = require("component")
-local coroutine = require("coroutine")
 local os = require("os")
 local keyboard = require("keyboard")
 

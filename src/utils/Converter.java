@@ -1,3 +1,5 @@
+package utils;
+
 import quantization.KMeans;
 import quantization.Palette;
 import quantization.Pixel;

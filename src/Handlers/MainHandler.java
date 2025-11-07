@@ -11,7 +11,7 @@ public class MainHandler implements HttpHandler {
     @Override
     public void handle( HttpExchange exchange ) throws IOException {
         String ip = exchange.getRequestHeaders().getFirst( "Host" );
-        Log.write( "\nAttempt to connect using " + ip + "\nat " + new Timestamp( System.currentTimeMillis() ) );
+        Log.write( "Attempt to connect using " + ip, "INFO" );
         if ( ip == null || !ip.equals( "helx.ddns.net" ) ) { Response.GFY( exchange ); }
         if ( exchange.getRequestURI().getPath().equals( "/file" ) ) {
             FileHandler.handle( exchange );
