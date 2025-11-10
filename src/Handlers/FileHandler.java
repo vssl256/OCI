@@ -1,13 +1,15 @@
 package Handlers;
 
+import Utils.Converter;
 import com.sun.net.httpserver.HttpExchange;
-import utils.Log;
+import Utils.Log;
 
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
+import java.util.Map;
 
 public class FileHandler {
     public static String file;
@@ -17,17 +19,64 @@ public class FileHandler {
     }
 
     public static void handle( HttpExchange exchange ) throws IOException {
-        String outputPath = "output/" + file.substring( 0, file.length() - 4 ) + ".bin";
-        Path path = Path.of( outputPath );
-        long size = Files.size( path );
+        if ( !exchange.getRequestMethod().equalsIgnoreCase( "GET" )) {
+            Response.GFY( exchange );
+            return;
+        }
+
+        String query = exchange.getRequestURI().getQuery();
+        System.out.println(query);
+        if (query == null || !query.startsWith( "name=" )) {
+            Response.GFY( exchange );
+            return;
+        }
+
+        Map<String, String> params = parseQuery( query );
+        String filename = params.getOrDefault( "name", "walt" );
+        int screenWidth = Integer.parseInt( params.getOrDefault( "width", "1" ) );
+        int screenHeight = Integer.parseInt( params.getOrDefault( "height", "1" ) );
+
+        Path baseDir = Path.of( "output" ).toAbsolutePath().normalize();
+        Path targetPath = baseDir.resolve( filename ).normalize();
+
+        if ( !targetPath.startsWith( baseDir )) {
+            Response.GFY( exchange );
+            return;
+        }
+
+        if ( filename.endsWith( ".png" ) || filename.endsWith( ".jpg" ) || filename.endsWith( ".jpeg" ) ) {
+            String baseName = filename.substring( 0, filename.lastIndexOf( '.' ) );
+            if ( !Files.exists( Path.of( "output/" + baseName + ".bin" ) ) ) {
+                Converter.convert( filename, screenWidth, screenHeight );
+            } else Log.write( "File already converted.", "INFO" );
+            filename = baseName;
+        }
+
+        Path path = Path.of( "output", filename + ".bin" );
+
+        exchange.getResponseHeaders().add( "Content-Type", "application/octet-stream" );
         exchange.getResponseHeaders().add(
                 "Content-Disposition",
-                "attachment; filename=\"" + new java.io.File( outputPath ).getName() + "\""
+                "attachment; filename=\"" + path.getFileName().toString() + "\""
         );
+
+        long size = Files.size( path );
         exchange.sendResponseHeaders( 200, size );
+
         try ( OutputStream os = exchange.getResponseBody() ) {
             Files.copy( path, os );
             Log.write( "File downloaded", "INFO" );
         }
+    }
+
+    private static Map<String, String> parseQuery( String query ) {
+        Map<String, String> map = new HashMap<>();
+        if ( query == null || query.isEmpty() ) return map;
+
+        for ( String param : query.split( "&" ) ) {
+            String[] pair = param.split( "=" );
+            if ( pair.length > 1 ) map.put( pair[0], pair[1] );
+        }
+        return map;
     }
 }

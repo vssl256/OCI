@@ -1,8 +1,8 @@
-package utils;
+package Utils;
 
-import quantization.KMeans;
-import quantization.Palette;
-import quantization.Pixel;
+import Quantization.KMeans;
+import Quantization.Palette;
+import Quantization.Pixel;
 
 import javax.imageio.ImageIO;
 import java.awt.*;
@@ -15,10 +15,11 @@ import java.util.List;
 public class Converter {
     private static String outputPath;
     private static String resizedPath;
+    private static String croppedPath;
 
     public static ArrayList<Pixel> pixels = new ArrayList<>();
 
-    public static void convert(String imagePath) throws IOException {
+    public static synchronized void convert( String imagePath, int screenWidth, int screenHeight ) throws IOException {
         if ( !imagePath.endsWith( ".png" ) && !imagePath.endsWith( ".jpg" ) ) {
             System.out.println( "Not an image format" );
             return;
@@ -26,19 +27,29 @@ public class Converter {
         String file = imagePath.substring( 0, imagePath.length() - 4 );
         imagePath = "input/" + imagePath;
         outputPath = "output/" + file + ".bin";
-        resizedPath = "debug/" + file + "_resized.png";
+        croppedPath = "output/debug/" + file + "_cropped.png";
+        resizedPath = "output/debug/" + file + "_resized.png";
         System.out.println( outputPath );
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();
         File imageFile = new File( imagePath );
         if ( !imageFile.exists() ) { System.out.println( "Cannot find file" ); return; }
 
         BufferedImage ogImage = ImageIO.read( imageFile );
-        int width = 160, height = 50;
+
+        int targetWidth = 135 * screenWidth;
+        int targetHeight = 100 * screenHeight;
+
+        double targetRatio = ( double ) targetWidth / targetHeight;
+        BufferedImage croppedImage = cropImage( ogImage, targetRatio );
+        ImageIO.write( croppedImage, "png", new File( croppedPath ) );
+
+        int width = Math.min( targetWidth, croppedImage.getWidth() );
+        int height = Math.min( targetHeight, croppedImage.getHeight() );
         BufferedImage bufferedImage = new BufferedImage( width, height, BufferedImage.TYPE_INT_RGB );
 
         Graphics2D graphics2D = bufferedImage.createGraphics();
         graphics2D.setRenderingHint( RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR );
-        graphics2D.drawImage( ogImage, 0, 0, width, height, null );
+        graphics2D.drawImage( croppedImage, 0, 0, width, height, null );
         graphics2D.dispose();
 
         Raster rasterImage = bufferedImage.getRaster();
@@ -57,11 +68,38 @@ public class Converter {
         reConvert( width, height );
     }
 
+    public static BufferedImage cropImage( BufferedImage original, double targetRatio ) {
+        int width = original.getWidth();
+        int height = original.getHeight();
+
+        int newWidth = width, newHeight = height;
+        int x = 0;
+        int y = 0;
+
+        double currentRatio = ( double ) width / height;
+
+        if ( currentRatio > targetRatio ) {
+            newWidth = ( int ) ( height * targetRatio );
+            x = ( width - newWidth ) / 2;
+        } else {
+            newHeight = ( int ) ( width / targetRatio );
+            y = ( height - newHeight ) / 2;
+        }
+
+        return original.getSubimage( x, y, newWidth, newHeight);
+    }
+
     public static void header( int width, int height, List<Pixel> pallete, ByteArrayOutputStream buffer ) throws IOException {
-        byte wByte = ( byte )width;
-        byte hByte = ( byte )height;
-        buffer.write( wByte );
-        buffer.write( hByte );
+        byte wHighByte = ( byte )( ( width >> 8 ) & 0xFF);
+        byte wLowByte = ( byte ) ( width & 0xFF );
+        buffer.write( wHighByte );
+        buffer.write( wLowByte );
+
+        byte hHighByte = ( byte ) ( ( height >> 8 ) & 0xFF );
+        byte hLowByte = ( byte ) ( height & 0xFF );
+        buffer.write( hHighByte );
+        buffer.write( hLowByte );
+
         for ( Pixel p : pallete ) {
             byte rByte = ( byte )p.getR();
             byte gByte = ( byte )p.getG();
@@ -85,12 +123,18 @@ public class Converter {
         }
     }
 
-    public static void convert( Raster rasterImage, ByteArrayOutputStream buffer ) throws IOException {
-        for ( int y = 0; y < rasterImage.getHeight(); y++ ) {
+    private static void convert( Raster rasterImage, ByteArrayOutputStream buffer ) throws IOException {
+        for ( int y = 0; y < rasterImage.getHeight(); y += 2 ) {
             for ( int x = 0; x < rasterImage.getWidth(); x++ ) {
-                int[] pixelColor = rasterImage.getPixel( x, y, ( int[] ) null );
-                byte[] colorsByte = toByte( pixelColor );
-                buffer.write( colorsByte );
+
+                int[] upperPixelColor = rasterImage.getPixel( x, y, ( int[] ) null );
+                byte[] upperColorByte = toByte( upperPixelColor );
+
+                int[] lowerPixelColor = rasterImage.getPixel( x, y + 1, ( int[] ) null );
+                byte[] lowerColorByte = toByte( lowerPixelColor );
+
+                buffer.write( upperColorByte );
+                buffer.write( lowerColorByte );
             }
         }
     }
@@ -118,7 +162,6 @@ public class Converter {
         return new byte[]{ ( byte )input[0], ( byte )input[1], ( byte )input[2] };
     }
 
-    //p.s this method made by chatgpt
     public static void reConvert( int width, int height ) throws IOException {
         BufferedImage reConverted = new BufferedImage( width, height, BufferedImage.TYPE_INT_RGB );
 
@@ -126,15 +169,23 @@ public class Converter {
         byte[] buffer = converted.readAllBytes();
         converted.close();
 
-        int index = 50;
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
-                int r = buffer[index++] & 0xFF;
-                int g = buffer[index++] & 0xFF;
-                int b = buffer[index++] & 0xFF;
+        int index = 52;
+        for ( int y = 0; y < height; y += 2 ) {
+            for ( int x = 0; x < width; x++ ) {
 
-                int rgb = (r << 16) | (g << 8) | b;
-                reConverted.setRGB(x, y, rgb);
+                int ur = buffer[ index++ ] & 0xFF;
+                int ug = buffer[ index++ ] & 0xFF;
+                int ub = buffer[ index++ ] & 0xFF;
+
+                int lr = buffer[ index++ ] & 0xFF;
+                int lg = buffer[ index++ ] & 0xFF;
+                int lb = buffer[ index++ ] & 0xFF;
+
+                int urgb = ( ur << 16 ) | ( ug << 8 ) | ub;
+                int lrgb = ( lr << 16 ) | ( lg << 8 ) | lb;
+
+                reConverted.setRGB( x, y, urgb );
+                reConverted.setRGB( x, y + 1, lrgb );
             }
         }
         ImageIO.write( reConverted, "png", new File( resizedPath ) );

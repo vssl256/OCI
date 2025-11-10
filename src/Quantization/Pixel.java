@@ -1,4 +1,4 @@
-package quantization;
+package Quantization;
 
 public class Pixel {
     private final int r, g, b;

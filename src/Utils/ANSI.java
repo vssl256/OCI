@@ -1,6 +1,6 @@
-package utils;
+package Utils;
 
-import quantization.Pixel;
+import Quantization.Pixel;
 
 import java.io.FileInputStream;
 import java.io.IOException;

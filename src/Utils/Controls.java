@@ -1,4 +1,4 @@
-package utils;
+package Utils;
 
 import Handlers.FileHandler;
 import com.sun.net.httpserver.HttpServer;
@@ -19,7 +19,7 @@ public class Controls {
             }
             file = peek;
             FileHandler.setFile( file );
-            Converter.convert( file );
+            Converter.convert( file, 1, 1 );
             if ( file.endsWith( ".png" ) || file.endsWith( ".jpg" ) ) {
                 file = file.substring( 0, file.length() - 4 ) + ".bin";
             }
