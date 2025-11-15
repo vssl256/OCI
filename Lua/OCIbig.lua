@@ -9,8 +9,9 @@ local term = require("term")
 local gpu = component.gpu
 
 local ip = "helx.ddns.net"
-local baseurl = "http://"..ip.."/file?name="
+local baseurl = "http://"..ip.."/file?"
 local url = baseurl
+local currentChunk = 1
 local handle
 local prevHandle
 local bytes = {}
@@ -19,6 +20,8 @@ local w, h = 135, 50
 local primaryScreen = component.screen.address
 local screenTable = component.list("screen")
 local sortedTable = {}
+
+local userInput
 
 function clear()
     gpu.setBackground(0x000000)
@@ -78,7 +81,7 @@ end
 
 function getImage()
     local ok
-    ok, handle = pcall(internet.request, url)
+    ok, handle = pcall(internet.request, url..".bin")
     if not ok or not handle then
         print("Ошибка запроса:", handle)
         return nil
@@ -120,12 +123,17 @@ function drawTwoPixels(x, y, upperColor, lowerColor)
 end
 
 function drawImage()
-    local index = 1
     for i, screen in ipairs(sortedTable) do
+        local index = 1
+        url = baseurl..userInput.."/output/"..i
+        getImage()
+
+        gpu.bind(mainScreen,false)
+        print("Drawing "..i)
+
         gpu.bind(screen, true)
         clear()
         gpu.setResolution(135, 50)
-
 
         wHigh = bytes[index]; index = index + 1
         wLow = bytes[index]; index = index + 1
@@ -134,6 +142,7 @@ function drawImage()
         hHight = bytes[index] / 2; index = index + 1
         hLow = bytes[index] / 2; index = index + 1
         h = ( hLow << 8 ) | hLow
+        h = h / 2
 
         for i = 0, 15 do
             local r = bytes[index]
@@ -166,7 +175,6 @@ function drawImage()
                 drawTwoPixels(x, y, upperColor, lowerColor)
             end
         end
-        ::skip::
     end
     gpu.bind(mainScreen, false)
     gpu.setResolution(80, 25)
@@ -183,7 +191,8 @@ end
 
 function clearAllScreens()
     for i, screen in ipairs(sortedTable) do
-        gpu.bind(screen)
+        gpu.bind(screen, false)
+        gpu.setResolution(135, 50)
         clear()
         setDefaultPalette()
     end
@@ -196,22 +205,24 @@ function start()
     term.setCursor(1, 1)
     print("Enter image name:")
     local name, screenWidth, screenHeight = query()
-    local userInput = name.."&width="..screenWidth.."&height="..screenHeight
-    url = baseurl..userInput
+    userInput = "width="..screenWidth.."&height="..screenHeight.."&name="..name
+    url = baseurl..userInput.."/output/"..currentChunk
+    local updated = getImage()
+    if updated then drawImage() end
     while true do
-        local updated = getImage()
-        if updated then
-            drawImage()
-        end
+        --local updated = getImage()
+        --if updated then
+        --    drawImage()
+        --end
         os.sleep(0.5)
         if keyboard.isControlDown() then
             name, screenWidth, screenHeight = query()
-            userInput = name.."&width="..screenWidth.."&height="..screenHeight
+            userInput = "width="..screenWidth.."&height="..screenHeight.."&name="..name
             if string.find(userInput, "exit") then
                 clearAllScreens()
                 os.exit()
             end
-            url = baseurl..userInput
+            if name ~= nil then url = baseurl..userInput.."/output/"..1 drawImage() end
         end
     end
 end

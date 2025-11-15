@@ -6,6 +6,8 @@ import Utils.Log;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
@@ -26,7 +28,7 @@ public class FileHandler {
 
         String query = exchange.getRequestURI().getQuery();
         System.out.println(query);
-        if (query == null || !query.startsWith( "name=" )) {
+        if (query == null || !query.contains( "name=" )) {
             Response.GFY( exchange );
             return;
         }
@@ -45,14 +47,19 @@ public class FileHandler {
         }
 
         if ( filename.endsWith( ".png" ) || filename.endsWith( ".jpg" ) || filename.endsWith( ".jpeg" ) ) {
+
             String baseName = filename.substring( 0, filename.lastIndexOf( '.' ) );
-            if ( !Files.exists( Path.of( "output/" + baseName + ".bin" ) ) ) {
+
+            if ( !Files.exists( Path.of( "output/" + baseName + "/output/" ) ) &&
+                 !Files.exists( Path.of( "output/" + baseName + ".bin" ) ) ) {
+
                 Converter.convert( filename, screenWidth, screenHeight );
             } else Log.write( "File already converted.", "INFO" );
+
             filename = baseName;
         }
 
-        Path path = Path.of( "output", filename + ".bin" );
+        Path path = Path.of( "output", filename );
 
         exchange.getResponseHeaders().add( "Content-Type", "application/octet-stream" );
         exchange.getResponseHeaders().add(
@@ -75,7 +82,11 @@ public class FileHandler {
 
         for ( String param : query.split( "&" ) ) {
             String[] pair = param.split( "=" );
-            if ( pair.length > 1 ) map.put( pair[0], pair[1] );
+            if ( pair.length > 1 ) {
+                String key = URLDecoder.decode( pair[ 0 ] );
+                String value = URLDecoder.decode( pair[ 1 ] );
+                map.put( key, value );
+            }
         }
         return map;
     }

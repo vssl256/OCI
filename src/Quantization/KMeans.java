@@ -27,7 +27,7 @@ public class KMeans {
             assignPoints();
             boolean changed = updateCentroids();
             if ( !changed ) {
-                System.out.println("Done at i= " + i);
+                System.out.println("Done at i = " + i);
                 break;
             }
         }
@@ -36,10 +36,6 @@ public class KMeans {
             palette.add( c );
         }
         return palette;
-    }
-
-    private void initializeCentroids() {
-
     }
 
     private void evenDist() {
@@ -65,43 +61,6 @@ public class KMeans {
         }
     }
 
-    private void initCentroids() {
-        clusters.clear();
-        Random rand = new Random();
-
-        int first = rand.nextInt( allPixels.size() );
-        clusters.add( new Cluster( allPixels.get( first ) ) );
-
-        while ( clusters.size() < k ) {
-            double[] distances = new double[allPixels.size()];
-            double sum = 0;
-            for ( int i = 0; i < allPixels.size(); i++ ) {
-                Pixel p = allPixels.get( i );
-
-                boolean tooClose = Palette.def.stream().anyMatch( c -> Pixel.distance( c, p ) < 20 );
-                if ( tooClose ) continue;
-
-                double minDist = Double.MAX_VALUE;
-                for ( Cluster c : clusters ) {
-                    double dist = Pixel.distance( p, c.getCentroid() );
-                    if ( dist < minDist ) minDist = dist;
-                }
-                distances[i] = minDist * minDist;
-                sum += distances[i];
-            }
-
-            double r = rand.nextDouble() * sum;
-            double acc = 0;
-            for ( int i = 0; i < allPixels.size(); i++ ) {
-                acc += distances[i];
-                if ( acc >= r ) {
-                    clusters.add( new Cluster( allPixels.get( i ) ) );
-                    break;
-                }
-            }
-        }
-    }
-
     private void assignPoints() {
         for ( Cluster cluster : clusters ) {
             if ( cluster.getPoints() == null ) continue;
@@ -121,10 +80,13 @@ public class KMeans {
             closestCluster.addPoint( pixel );
         }
     }
+    Double prevPrevSum = null;
+    Double prevSum = null;
 
     public boolean updateCentroids() {
         boolean changed = false;
-
+        int i = 1;
+        double sum = 0.0;
         for ( Cluster cluster : clusters ) {
             double sumL = 0, sumA = 0, sumB = 0;
             for ( Pixel pixel : cluster.getPoints() ) {
@@ -147,12 +109,28 @@ public class KMeans {
                     Math.pow( centroid.A - newA, 2 ) +
                     Math.pow( centroid.B - newB, 2 )
             );
+
             if ( dist > threshold ) {
                 centroid = Pixel.fromLAB( newL, newA, newB );
                 cluster.setCentroid( centroid );
                 changed = true;
             }
+
+            sum += dist;
+            i++;
         }
+        sum /= clusters.size();
+
+        if ( prevSum != null && prevPrevSum != null ) {
+            if ( Math.abs( prevPrevSum - sum ) < 0.0001 ) {
+                changed = false;
+                System.out.printf("Accuracy = %.2f ", sum );
+            }
+        }
+
+        prevPrevSum = prevSum;
+        prevSum = sum;
+
         return changed;
     }
 }

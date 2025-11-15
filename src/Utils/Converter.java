@@ -15,7 +15,6 @@ import java.util.List;
 public class Converter {
     private static String outputPath;
     private static String resizedPath;
-    private static String croppedPath;
 
     public static ArrayList<Pixel> pixels = new ArrayList<>();
 
@@ -26,10 +25,11 @@ public class Converter {
         };
         String file = imagePath.substring( 0, imagePath.length() - 4 );
         imagePath = "input/" + imagePath;
+
+        String croppedPath = "output/debug/" + file + "cropped.png";
         outputPath = "output/" + file + ".bin";
-        croppedPath = "output/debug/" + file + "_cropped.png";
         resizedPath = "output/debug/" + file + "_resized.png";
-        System.out.println( outputPath );
+
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();
         File imageFile = new File( imagePath );
         if ( !imageFile.exists() ) { System.out.println( "Cannot find file" ); return; }
@@ -40,7 +40,7 @@ public class Converter {
         int targetHeight = 100 * screenHeight;
 
         double targetRatio = ( double ) targetWidth / targetHeight;
-        BufferedImage croppedImage = cropImage( ogImage, targetRatio );
+        BufferedImage croppedImage = ImageUtils.crop( ogImage, targetRatio );
         ImageIO.write( croppedImage, "png", new File( croppedPath ) );
 
         int width = Math.min( targetWidth, croppedImage.getWidth() );
@@ -51,6 +51,12 @@ public class Converter {
         graphics2D.setRenderingHint( RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR );
         graphics2D.drawImage( croppedImage, 0, 0, width, height, null );
         graphics2D.dispose();
+
+        if ( screenWidth != 1 || screenHeight != 1 ) {
+            ImageUtils.split( bufferedImage, screenWidth, screenHeight, file );
+            convertDir( file );
+            return;
+        }
 
         Raster rasterImage = bufferedImage.getRaster();
 
@@ -68,25 +74,41 @@ public class Converter {
         reConvert( width, height );
     }
 
-    public static BufferedImage cropImage( BufferedImage original, double targetRatio ) {
-        int width = original.getWidth();
-        int height = original.getHeight();
+    public static void convertDir( String name ) throws IOException {
 
-        int newWidth = width, newHeight = height;
-        int x = 0;
-        int y = 0;
+        String path = "output/" + name + "/";
+        String inPath = path + "/temp/";
+        String outPath = path + "/output/";
 
-        double currentRatio = ( double ) width / height;
+        File inDir = new File( inPath );
+        File outDir = new File( outPath );
+        if ( !inDir.exists() ) inDir.mkdirs();
+        if ( !outDir.exists() ) outDir.mkdir();
 
-        if ( currentRatio > targetRatio ) {
-            newWidth = ( int ) ( height * targetRatio );
-            x = ( width - newWidth ) / 2;
-        } else {
-            newHeight = ( int ) ( width / targetRatio );
-            y = ( height - newHeight ) / 2;
+        File[] chunks = inDir.listFiles();
+
+        for ( int i = 0; i < chunks.length; i++ ) {
+            File chunk = chunks[i];
+            ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+
+            outputPath = outPath + chunk.getName().substring( 0, chunk.getName().lastIndexOf( '.' ) ) + ".bin";
+
+            BufferedImage image = ImageIO.read( chunk );
+            Raster raster = image.getRaster();
+
+            Palette.initDef();
+
+            pixels.clear();
+            read( raster );
+
+            KMeans kMeans = new KMeans( pixels );
+            List<Pixel> palette = kMeans.run( 20000 );
+            Palette.print( palette );
+
+            header( 135, 100, palette, buffer );
+            convert( raster, buffer );
+            writeOutput( buffer );
         }
-
-        return original.getSubimage( x, y, newWidth, newHeight);
     }
 
     public static void header( int width, int height, List<Pixel> pallete, ByteArrayOutputStream buffer ) throws IOException {
